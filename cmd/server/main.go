@@ -19,6 +19,12 @@ func main() {
 	defer conn.Close()
 	fmt.Println("Connection successful")
 
+	newCh, err := conn.Channel()
+	if err != nil {
+		fmt.Println("Couln't dial:", err)
+		return
+	}
+
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 	<-signalChan
