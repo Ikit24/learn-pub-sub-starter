@@ -46,6 +46,27 @@ func main() {
 		log.Printf("could not publish: %v", err)
 	}
 
+	connString = "amqp://guest:guest@localhost:5672/"
+	conn, err = amqp.Dial(connString)
+	if err != nil {
+		fmt.Println("Couldn't dial:", err)
+		return
+	}
+	defer conn.Close()
+	fmt.Println("Connection successful")
+
+	_, _, err = pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		"game_logs",
+		"game_logs.*",
+		pubsub.SimpleQueueDurable,
+	)
+
+	if err != nil {
+		log.Fatalf("could not publish: %v", err)
+	}
+
 	gamelogic.PrintServerHelp()
 	for {
 		words := gamelogic.GetInput()
@@ -87,7 +108,6 @@ func main() {
 			fmt.Println("unknown command")
 		}
 	}
-
 	<-signalChan
 
 	fmt.Println("Shutting down.. ")
