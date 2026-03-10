@@ -1,6 +1,7 @@
 package pubsub
 
 import (
+	"log"
 	"context"
 	"encoding/json"
 
@@ -63,4 +64,40 @@ func DeclareAndBind(
     }
 
     return ch, queue, nil
+}
+
+func SubscribeJSON[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	queueType SimpleQueueType,
+	handler func(T),
+) error {ch, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	if err != nil {
+		return err
+	}
+	msgs, err := ch.Consume(queueName, "", false, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for d := range msgs {
+			var data T
+			err := json.Unmarshal(d.Body, &data)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			handler(data)
+			err = d.Ack(false)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+		}
+	}()
+
+	return nil
 }
