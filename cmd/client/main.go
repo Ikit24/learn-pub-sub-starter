@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 	amqp "github.com/rabbitmq/amqp091-go"
 	
     "github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -24,19 +22,22 @@ func main() {
 	fmt.Println("Connection successful")
 
 	username, _ := gamelogic.ClientWelcome()
-	_, _, err = pubsub.DeclareAndBind(
+	gs := gamelogic.NewGameState(username)
+	
+	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
 		"pause." + username,
 		routing.PauseKey,
 		pubsub.SimpleQueueTransient,
+		handlerPause(gs),
 	)
 	if err != nil {
-		fmt.Println("Unable to connect:", err)
-		return
-	}
+			fmt.Println("Unable to subscribe:", err)
+			return
+		}
 
-	gs := gamelogic.NewGameState(username)
+	gs = gamelogic.NewGameState(username)
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
@@ -71,7 +72,4 @@ func main() {
 			continue
 		}
 	}
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
-	<-signalChan
 }

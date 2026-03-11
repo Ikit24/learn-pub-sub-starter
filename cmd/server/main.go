@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
 
     "github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
     "github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
@@ -18,20 +16,67 @@ func main() {
 	connString := "amqp://guest:guest@localhost:5672/"
 	conn, err := amqp.Dial(connString)
 	if err != nil {
-		fmt.Println("Couldn't dial:", err)
-		return
+		log.Fatalf("Couldn't dial: %v", err)
 	}
 	defer conn.Close()
 	fmt.Println("Connection successful")
-
 	ch, err := conn.Channel()
 	if err != nil {
-		fmt.Println("Couln't dial:", err)
-		return
+		log.Fatal(err)
 	}
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, os.Interrupt)
+	err = ch.ExchangeDeclare(
+		routing.ExchangePerilTopic,
+		"topic",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = ch.ExchangeDeclare(
+		routing.ExchangePerilDirect,
+		"direct",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	_, _, err = pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		"game_logs",
+		"game_logs.*",
+		pubsub.SimpleQueueDurable,
+	)
+	if err != nil {
+		log.Fatalf("could not declare topic exchange: %v", err)
+	}
+
+	_, _, err = pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilDirect,
+		"pause_queue",
+		routing.PauseKey,
+		pubsub.SimpleQueueTransient,
+	)
+	if err != nil {
+		log.Fatalf("could not declare direct exchange: %v", err)
+	}
+
+	ch, err = conn.Channel()
+	if err != nil {
+		log.Fatalf("Couldn't create channel: %v", err)
+	}
 
 	err = pubsub.PublishJSON(
 		ch,
@@ -41,30 +86,8 @@ func main() {
 			IsPaused: true,
 		},
 	)
-
 	if err != nil {
-		log.Printf("could not publish: %v", err)
-	}
-
-	connString = "amqp://guest:guest@localhost:5672/"
-	conn, err = amqp.Dial(connString)
-	if err != nil {
-		fmt.Println("Couldn't dial:", err)
-		return
-	}
-	defer conn.Close()
-	fmt.Println("Connection successful")
-
-	_, _, err = pubsub.DeclareAndBind(
-		conn,
-		routing.ExchangePerilTopic,
-		"game_logs",
-		"game_logs.*",
-		pubsub.SimpleQueueDurable,
-	)
-
-	if err != nil {
-		log.Fatalf("could not publish: %v", err)
+		log.Printf("could not publish initial pause: %v", err)
 	}
 
 	gamelogic.PrintServerHelp()
@@ -108,7 +131,4 @@ func main() {
 			fmt.Println("unknown command")
 		}
 	}
-	<-signalChan
-
-	fmt.Println("Shutting down.. ")
 }
