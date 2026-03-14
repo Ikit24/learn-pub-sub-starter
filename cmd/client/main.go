@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"fmt"
 	amqp "github.com/rabbitmq/amqp091-go"
 	
@@ -23,7 +24,7 @@ func main() {
 
 	username, _ := gamelogic.ClientWelcome()
 	gs := gamelogic.NewGameState(username)
-	
+
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
@@ -37,6 +38,23 @@ func main() {
 			return
 		}
 
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix + "." + username,
+		routing.ArmyMovesPrefix + ".*",
+		pubsub.SimpleQueueTransient,
+		handlerMove(gs),
+	)
+	if err != nil {
+			fmt.Println("Unable to subscribe movement:", err)
+			return
+		}
+
+	chn, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("couldn't create channel: %v", err)
+	}
 	gs = gamelogic.NewGameState(username)
 	for {
 		words := gamelogic.GetInput()
@@ -52,10 +70,20 @@ func main() {
 				continue
 			}
 		case "move":
-			_, err := gs.CommandMove(words)
+			mv, err := gs.CommandMove(words)
 			if err != nil {
 				fmt.Println(err)
 				continue
+			}
+			err = pubsub.PublishJSON(
+				chn,
+				routing.ExchangePerilTopic,
+				routing.ArmyMovesPrefix + "." + mv.Player.Username,
+				mv,
+				)
+			if err != nil {
+				fmt.Println("Error, couldn't publish", err)
+				return
 			}
 			fmt.Println("Move successful!")
 		case "status":
