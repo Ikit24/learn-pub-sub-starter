@@ -4,17 +4,19 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type MoveOutcome int
 
 const (
 	MoveOutcomeSamePlayer MoveOutcome = iota
-	MoveOutComeSafe
+	MoveOutcomeSafe
 	MoveOutcomeMakeWar
 )
 
-func (gs *GameState) HandleMove(move ArmyMove) MoveOutcome {
+func (gs *GameState) HandleMove(move ArmyMove, ch *amqp.Channel) MoveOutcome {
 	defer fmt.Println("------------------------")
 	player := gs.GetPlayerSnap()
 
@@ -35,7 +37,7 @@ func (gs *GameState) HandleMove(move ArmyMove) MoveOutcome {
 		return MoveOutcomeMakeWar
 	}
 	fmt.Printf("You are safe from %s's units.\n", move.Player.Username)
-	return MoveOutComeSafe
+	return MoveOutcomeSafe
 }
 
 func getOverlappingLocation(p1 Player, p2 Player) Location {

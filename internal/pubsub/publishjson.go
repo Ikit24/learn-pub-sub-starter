@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"log"
+	"fmt"
 	"context"
 	"encoding/json"
 
@@ -48,11 +49,13 @@ func DeclareAndBind(
 
     queue, err := ch.QueueDeclare(
         queueName,
-        queueType == SimpleQueueDurable,
+		queueType == SimpleQueueDurable,
         queueType != SimpleQueueDurable,
         queueType != SimpleQueueDurable,
         false,
-        nil,
+        amqp.Table{
+			"x-dead-letter-exchange":"peril_dlx",
+		},
     )
     if err != nil {
         return nil, amqp.Queue{}, err
@@ -66,18 +69,26 @@ func DeclareAndBind(
     return ch, queue, nil
 }
 
+type Acktype int
+
+const (
+	Ack Acktype = iota
+	NackDiscard
+	NackRequeue
+)
+
 func SubscribeJSON[T any](
 	conn *amqp.Connection,
 	exchange,
 	queueName,
 	key string,
 	queueType SimpleQueueType,
-	handler func(T),
-) error {ch, _, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
+	handler func(T) Acktype,
+) error {ch, queue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
 		return err
 	}
-	msgs, err := ch.Consume(queueName, "", false, false, false, false, nil)
+	msgs, err := ch.Consume(queue.Name, "", false, false, false, false, nil)
 	if err != nil {
 		return err
 	}
@@ -90,11 +101,17 @@ func SubscribeJSON[T any](
 				log.Println(err)
 				continue
 			}
-			handler(data)
-			err = d.Ack(false)
-			if err != nil {
-				log.Println(err)
-				continue
+			ackType := handler(data)
+			switch ackType {
+			case Ack:
+				d.Ack(false)
+				fmt.Println("message is acknowledged")
+			case NackRequeue:
+				d.Nack(false, true)
+				fmt.Println("message is requeued")
+			case NackDiscard:
+				d.Nack(false, false)
+				fmt.Println("message is discarded")
 			}
 		}
 	}()
