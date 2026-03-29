@@ -51,12 +51,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	_, _, err = pubsub.DeclareAndBind(
+	err = pubsub.SubscribeGob(
 		conn,
 		routing.ExchangePerilTopic,
-		"game_logs",
-		"game_logs.*",
+		routing.GameLogSlug,
+		routing.GameLogSlug+".*",
 		pubsub.SimpleQueueDurable,
+		handlerLogs(),
 	)
 	if err != nil {
 		log.Fatalf("could not declare topic exchange: %v", err)
