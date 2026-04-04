@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"fmt"
+	"strconv"
 	amqp "github.com/rabbitmq/amqp091-go"
 	
     "github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
@@ -106,8 +107,23 @@ func main() {
 			return
 		case "help":
 			gamelogic.PrintClientHelp()
-		case "spam":
-			fmt.Println("Spamming not allowed yet!")
+		case "spam" :
+			if len(words) < 2 {
+				fmt.Println("usage: spam <n>")
+				continue
+			}
+			n, err := strconv.Atoi(words[1])
+			if err != nil {
+				fmt.Println("unable to convert")
+			}
+		for i := 0; i < n; i++ {
+				logMsg := gamelogic.GetMaliciousLog()
+				err = publishGameLog(publishCh, username, logMsg)
+				if err != nil {
+					fmt.Println("error, couldn't publish", err)
+					continue
+				}
+			}
 		default:
 			fmt.Println("unknown command")
 			continue

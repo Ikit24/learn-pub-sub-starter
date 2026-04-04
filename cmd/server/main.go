@@ -66,7 +66,7 @@ func main() {
 	_, _, err = pubsub.DeclareAndBind(
 		conn,
 		routing.ExchangePerilDirect,
-		"pause_queue",
+		routing.PauseKey,
 		routing.PauseKey,
 		pubsub.SimpleQueueTransient,
 	)
